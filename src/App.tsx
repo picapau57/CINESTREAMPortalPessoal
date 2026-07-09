@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Film, Music, Tv, FileAudio, Heart, LayoutGrid, Plus, 
   Search, Sparkles, User, Database, Info, RefreshCw,
-  Video, Eye, Play, Star, ChevronRight
+  Video, Eye, Play, Star, ChevronRight, Cloud, CloudOff
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MediaItem, PlaybackState, CategoryFilter } from './types';
@@ -11,6 +11,8 @@ import MediaPlayer from './components/MediaPlayer';
 import AddMediaModal from './components/AddMediaModal';
 import MediaGrid from './components/MediaGrid';
 import ResumePlayingList from './components/ResumePlayingList';
+import { db, mediaCollectionRef, progressCollectionRef } from './lib/firebase';
+import { onSnapshot, doc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 
 export default function App() {
   // --- STATE ---
@@ -21,6 +23,7 @@ export default function App() {
   const [activeMediaItem, setActiveMediaItem] = useState<MediaItem | null>(null);
   const [initialPlayhead, setInitialPlayhead] = useState(0);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isCloudSynced, setIsCloudSynced] = useState(false);
   
   // Custom interactive stat/info box toggle
   const [showStats, setShowStats] = useState(false);
@@ -28,117 +31,177 @@ export default function App() {
   // User details for personalization
   const userEmail = "picapauinformatica@gmail.com";
 
-  // --- INITIALIZATION ---
+  // --- INITIALIZATION (FIREBASE SYNCHRONIZATION) ---
   useEffect(() => {
-    // Load media items from localStorage or seed defaults
-    const savedMedia = localStorage.getItem('personal_streaming_media');
-    if (savedMedia) {
-      try {
-        setMediaItems(JSON.parse(savedMedia));
-      } catch (e) {
-        console.error('Failed to parse saved media, resetting to default.', e);
+    // 1. Sync Media Items from Firestore in real-time
+    const unsubscribeMedia = onSnapshot(mediaCollectionRef, async (snapshot) => {
+      if (snapshot.empty) {
+        console.log("Firestore media items collection is empty. Seeding defaults...");
+        try {
+          // Push each default media item to Firestore
+          for (const item of DEFAULT_MEDIA_ITEMS) {
+            await setDoc(doc(db, 'media_items', item.id), item);
+          }
+        } catch (error) {
+          console.error("Error seeding defaults to Firestore:", error);
+        }
+      } else {
+        const items: MediaItem[] = [];
+        snapshot.forEach((d) => {
+          items.push(d.data() as MediaItem);
+        });
+        // Sort items by addedAt descending (newest first)
+        items.sort((a, b) => new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime());
+        setMediaItems(items);
+        localStorage.setItem('personal_streaming_media', JSON.stringify(items));
+      }
+      setIsCloudSynced(true);
+    }, (error) => {
+      console.error("Firestore media subscription error:", error);
+      setIsCloudSynced(false);
+      // Fallback to local storage if Firestore is blocked or fails
+      const savedMedia = localStorage.getItem('personal_streaming_media');
+      if (savedMedia) {
+        try {
+          setMediaItems(JSON.parse(savedMedia));
+        } catch (e) {
+          setMediaItems(DEFAULT_MEDIA_ITEMS);
+        }
+      } else {
         setMediaItems(DEFAULT_MEDIA_ITEMS);
-        localStorage.setItem('personal_streaming_media', JSON.stringify(DEFAULT_MEDIA_ITEMS));
       }
-    } else {
-      setMediaItems(DEFAULT_MEDIA_ITEMS);
-      localStorage.setItem('personal_streaming_media', JSON.stringify(DEFAULT_MEDIA_ITEMS));
-    }
+    });
 
-    // Load playback states (history/progress)
-    const savedProgress = localStorage.getItem('personal_streaming_progress');
-    if (savedProgress) {
-      try {
-        setPlaybackStates(JSON.parse(savedProgress));
-      } catch (e) {
-        console.error('Failed to parse saved playback states.', e);
+    // 2. Sync Playback Progress from Firestore in real-time
+    const unsubscribeProgress = onSnapshot(progressCollectionRef, (snapshot) => {
+      const states: { [key: string]: PlaybackState } = {};
+      snapshot.forEach((d) => {
+        states[d.id] = d.data() as PlaybackState;
+      });
+      setPlaybackStates(states);
+      localStorage.setItem('personal_streaming_progress', JSON.stringify(states));
+    }, (error) => {
+      console.error("Firestore progress subscription error:", error);
+      const savedProgress = localStorage.getItem('personal_streaming_progress');
+      if (savedProgress) {
+        try {
+          setPlaybackStates(JSON.parse(savedProgress));
+        } catch (e) {}
       }
-    }
+    });
+
+    return () => {
+      unsubscribeMedia();
+      unsubscribeProgress();
+    };
   }, []);
 
-  // --- PERSISTENCE WRITERS ---
-  const saveMediaToLocalStorage = (items: MediaItem[]) => {
-    setMediaItems(items);
-    localStorage.setItem('personal_streaming_media', JSON.stringify(items));
-  };
-
-  const saveProgressToLocalStorage = (states: { [key: string]: PlaybackState }) => {
-    setPlaybackStates(states);
-    localStorage.setItem('personal_streaming_progress', JSON.stringify(states));
-  };
-
   // --- ACTION HANDLERS ---
-  const handleToggleFavorite = (id: string) => {
-    const updated = mediaItems.map(item => {
-      if (item.id === id) {
-        return { ...item, isFavorite: !item.isFavorite };
-      }
-      return item;
-    });
-    saveMediaToLocalStorage(updated);
+  const handleToggleFavorite = async (id: string) => {
+    const item = mediaItems.find(i => i.id === id);
+    if (!item) return;
+
+    const newFavoriteState = !item.isFavorite;
+
+    // Optimistic local state update for instant visual response
+    setMediaItems(prev => prev.map(i => i.id === id ? { ...i, isFavorite: newFavoriteState } : i));
+
+    try {
+      await updateDoc(doc(db, 'media_items', id), { isFavorite: newFavoriteState });
+    } catch (e) {
+      console.error("Failed to update favorite in Firestore:", e);
+    }
   };
 
-  const handleAddMedia = (newItemOrItems: Omit<MediaItem, 'id' | 'addedAt' | 'isFavorite'> | Omit<MediaItem, 'id' | 'addedAt' | 'isFavorite'>[]) => {
-    if (Array.isArray(newItemOrItems)) {
-      const createdItems: MediaItem[] = newItemOrItems.map((item, index) => ({
-        ...item,
-        id: `user-${Date.now()}-${index}`,
-        addedAt: new Date().toISOString(),
-        isFavorite: false
-      }));
-      const updated = [...createdItems, ...mediaItems];
-      saveMediaToLocalStorage(updated);
-    } else {
-      const createdItem: MediaItem = {
-        ...newItemOrItems,
-        id: `user-${Date.now()}`,
-        addedAt: new Date().toISOString(),
-        isFavorite: false
-      };
-      const updated = [createdItem, ...mediaItems];
-      saveMediaToLocalStorage(updated);
+  const handleAddMedia = async (newItemOrItems: Omit<MediaItem, 'id' | 'addedAt' | 'isFavorite'> | Omit<MediaItem, 'id' | 'addedAt' | 'isFavorite'>[]) => {
+    const now = new Date().toISOString();
+    try {
+      if (Array.isArray(newItemOrItems)) {
+        for (let index = 0; index < newItemOrItems.length; index++) {
+          const item = newItemOrItems[index];
+          const id = `user-${Date.now()}-${index}`;
+          const created: MediaItem = {
+            ...item,
+            id,
+            addedAt: now,
+            isFavorite: false
+          };
+          await setDoc(doc(db, 'media_items', id), created);
+        }
+      } else {
+        const id = `user-${Date.now()}`;
+        const created: MediaItem = {
+          ...newItemOrItems,
+          id,
+          addedAt: now,
+          isFavorite: false
+        };
+        await setDoc(doc(db, 'media_items', id), created);
+      }
+    } catch (e) {
+      console.error("Failed to add media to Firestore:", e);
+      alert("Erro ao salvar mídias na nuvem. Verifique sua conexão.");
     }
     setIsAddModalOpen(false);
   };
 
-  const handleDeleteMedia = (id: string) => {
-    // Simple native confirmation inside our custom workspace
+  const handleDeleteMedia = async (id: string) => {
     const confirmDelete = window.confirm("Tem certeza de que deseja remover esta mídia da sua lista de streaming pessoal?");
     if (!confirmDelete) return;
 
-    const updated = mediaItems.filter(item => item.id !== id);
-    saveMediaToLocalStorage(updated);
+    // Optimistic local state update
+    setMediaItems(prev => prev.filter(item => item.id !== id));
 
-    // Also clear its saved progress if any
-    const updatedProgress = { ...playbackStates };
-    delete updatedProgress[id];
-    saveProgressToLocalStorage(updatedProgress);
+    try {
+      await deleteDoc(doc(db, 'media_items', id));
+      // Also clean watch progress
+      await deleteDoc(doc(db, 'playback_progress', id));
+    } catch (e) {
+      console.error("Failed to delete from Firestore:", e);
+    }
   };
 
-  const handleProgressUpdate = (mediaId: string, progress: number, duration: number) => {
-    const updatedStates = {
-      ...playbackStates,
-      [mediaId]: {
-        mediaId,
-        progress,
-        duration,
-        lastPlayedAt: new Date().toISOString()
-      }
+  const handleProgressUpdate = async (mediaId: string, progress: number, duration: number) => {
+    const lastPlayedAt = new Date().toISOString();
+    const state: PlaybackState = {
+      mediaId,
+      progress,
+      duration,
+      lastPlayedAt
     };
-    saveProgressToLocalStorage(updatedStates);
+
+    // Optimistic local state update
+    setPlaybackStates(prev => ({
+      ...prev,
+      [mediaId]: state
+    }));
+
+    try {
+      await setDoc(doc(db, 'playback_progress', mediaId), state);
+    } catch (e) {
+      console.error("Failed to update progress in Firestore:", e);
+    }
   };
 
-  const handleClearProgress = (mediaId: string) => {
-    const updated = { ...playbackStates };
-    delete updated[mediaId];
-    saveProgressToLocalStorage(updated);
+  const handleClearProgress = async (mediaId: string) => {
+    // Optimistic local state update
+    setPlaybackStates(prev => {
+      const updated = { ...prev };
+      delete updated[mediaId];
+      return updated;
+    });
+
+    try {
+      await deleteDoc(doc(db, 'playback_progress', mediaId));
+    } catch (e) {
+      console.error("Failed to clear progress in Firestore:", e);
+    }
   };
 
-  const handleResetToDefaults = () => {
-    const confirmReset = window.confirm("Deseja restaurar as mídias padrões? Suas mídias adicionadas manualmente não serão removidas se mantivermos a lista.");
+  const handleResetToDefaults = async () => {
+    const confirmReset = window.confirm("Deseja restaurar as mídias padrões? Suas mídias adicionadas manualmente não serão removidas.");
     if (!confirmReset) return;
 
-    // Merge defaults back in (prevent duplicates)
     const existingUrls = new Set(mediaItems.map(item => item.url));
     const toAdd = DEFAULT_MEDIA_ITEMS.filter(item => !existingUrls.has(item.url));
     
@@ -147,8 +210,15 @@ export default function App() {
       return;
     }
 
-    const merged = [...mediaItems, ...toAdd];
-    saveMediaToLocalStorage(merged);
+    try {
+      for (const item of toAdd) {
+        await setDoc(doc(db, 'media_items', item.id), item);
+      }
+      alert("Canais e mídias padrões restaurados com sucesso na nuvem!");
+    } catch (e) {
+      console.error("Error restoring defaults in Firestore:", e);
+      alert("Erro ao restaurar mídias padrões.");
+    }
   };
 
   const handleSelectMedia = (item: MediaItem, customProgress?: number) => {
@@ -406,6 +476,19 @@ export default function App() {
           {/* Settings & Info toggles */}
           <div className="flex items-center gap-3">
             
+            {/* Cloud Sync Status Badge */}
+            {isCloudSynced ? (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-[10px] font-bold select-none shadow-sm">
+                <Cloud size={13} className="text-emerald-400 animate-pulse" />
+                <span className="hidden sm:inline">Sincronizado</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-yellow-500/10 border border-yellow-500/25 text-yellow-500 text-[10px] font-bold select-none shadow-sm">
+                <CloudOff size={13} className="animate-pulse" />
+                <span className="hidden sm:inline">Conectando...</span>
+              </div>
+            )}
+
             {/* Quick stats panel toggle */}
             <button
               onClick={() => setShowStats(!showStats)}
