@@ -12,7 +12,7 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+export const db = getFirestore(app, "ai-studio-streamingpessoal-56619329-ceff-479b-b441-515a4c0750e5");
 
 // Collection References
 export const mediaCollectionRef = collection(db, 'media_items');
