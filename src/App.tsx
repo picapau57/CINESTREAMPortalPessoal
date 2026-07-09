@@ -16,8 +16,28 @@ import { onSnapshot, doc, setDoc, deleteDoc, updateDoc } from 'firebase/firestor
 
 export default function App() {
   // --- STATE ---
-  const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
-  const [playbackStates, setPlaybackStates] = useState<{ [key: string]: PlaybackState }>({});
+  const [mediaItems, setMediaItems] = useState<MediaItem[]>(() => {
+    const savedMedia = localStorage.getItem('personal_streaming_media');
+    if (savedMedia) {
+      try {
+        return JSON.parse(savedMedia);
+      } catch (e) {
+        return DEFAULT_MEDIA_ITEMS;
+      }
+    }
+    return DEFAULT_MEDIA_ITEMS;
+  });
+  const [playbackStates, setPlaybackStates] = useState<{ [key: string]: PlaybackState }>(() => {
+    const savedProgress = localStorage.getItem('personal_streaming_progress');
+    if (savedProgress) {
+      try {
+        return JSON.parse(savedProgress);
+      } catch (e) {
+        return {};
+      }
+    }
+    return {};
+  });
   const [activeCategory, setActiveCategory] = useState<CategoryFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeMediaItem, setActiveMediaItem] = useState<MediaItem | null>(null);

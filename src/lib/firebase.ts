@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { initializeFirestore, collection, getDocs, doc, setDoc, deleteDoc, onSnapshot, updateDoc } from 'firebase/firestore';
 
 const firebaseConfig = {
   projectId: "splendid-yeti-137722",
@@ -12,7 +12,11 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, "ai-studio-streamingpessoal-56619329-ceff-479b-b441-515a4c0750e5");
+
+// Initialize Firestore with custom database ID and long polling forced for TV Box compatibility
+export const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true,
+}, "ai-studio-streamingpessoal-56619329-ceff-479b-b441-515a4c0750e5");
 
 // Collection References
 export const mediaCollectionRef = collection(db, 'media_items');

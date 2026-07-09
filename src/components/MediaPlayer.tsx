@@ -88,19 +88,17 @@ export default function MediaPlayer({ item, initialProgress = 0, onClose, onProg
               }
             }
           });
-        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-          // Native HLS (Safari)
+        } else {
+          // Force native stream setting (highly compatible fallback for Android TV, TV Box, Safari, and other Smart TVs)
+          console.log("Hls.js not supported. Attempting native HLS stream playback.");
           video.src = item.url;
           video.currentTime = initialProgress;
           video.play()
             .then(() => setIsPlaying(true))
             .catch((err) => {
-              console.log('Autoplay blocked or failed:', err);
+              console.warn('Native autoplay failed, waiting for user interaction:', err);
               setIsPlaying(false);
             });
-        } else {
-          setErrorMsg('Seu navegador não suporta a reprodução de transmissões HLS (.m3u8).');
-          setIsPlaying(false);
         }
       } else {
         // Regular non-HLS video
