@@ -1,0 +1,6 @@
+{
+  "name": "Streaming Pessoal",
+  "description": "Seu portal de streaming pessoal. Organize, gerencie e transmita seus canais de TV, filmes, séries, podcasts e músicas favoritos.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
