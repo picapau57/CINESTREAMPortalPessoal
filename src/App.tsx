@@ -73,7 +73,11 @@ export default function App() {
         // Sort items by addedAt descending (newest first)
         items.sort((a, b) => new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime());
         setMediaItems(items);
-        localStorage.setItem('personal_streaming_media', JSON.stringify(items));
+        try {
+          localStorage.setItem('personal_streaming_media', JSON.stringify(items));
+        } catch (e) {
+          console.warn("localStorage quota exceeded or blocked for personal_streaming_media", e);
+        }
       }
       setIsCloudSynced(true);
     }, (error) => {
@@ -99,7 +103,11 @@ export default function App() {
         states[d.id] = d.data() as PlaybackState;
       });
       setPlaybackStates(states);
-      localStorage.setItem('personal_streaming_progress', JSON.stringify(states));
+      try {
+        localStorage.setItem('personal_streaming_progress', JSON.stringify(states));
+      } catch (e) {
+        console.warn("localStorage quota exceeded or blocked for personal_streaming_progress", e);
+      }
     }, (error) => {
       console.error("Firestore progress subscription error:", error);
       const savedProgress = localStorage.getItem('personal_streaming_progress');

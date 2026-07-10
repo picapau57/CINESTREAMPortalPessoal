@@ -323,7 +323,11 @@ export default function MediaPlayer({ item, initialProgress = 0, onClose, onProg
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newVol = parseFloat(e.target.value);
     setVolume(newVol);
-    localStorage.setItem('player_volume', newVol.toString());
+    try {
+      localStorage.setItem('player_volume', newVol.toString());
+    } catch (err) {
+      console.warn("Failed to save player_volume to localStorage", err);
+    }
     const media = mediaRef.current;
     if (media) {
       media.volume = newVol;
@@ -335,7 +339,11 @@ export default function MediaPlayer({ item, initialProgress = 0, onClose, onProg
   const adjustVolume = (amount: number) => {
     const newVol = Math.max(0, Math.min(1, volume + amount));
     setVolume(newVol);
-    localStorage.setItem('player_volume', newVol.toString());
+    try {
+      localStorage.setItem('player_volume', newVol.toString());
+    } catch (err) {
+      console.warn("Failed to save player_volume to localStorage", err);
+    }
     const media = mediaRef.current;
     if (media) {
       media.volume = newVol;

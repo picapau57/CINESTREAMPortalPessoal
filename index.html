@@ -91,6 +91,106 @@
           console.log("AbortController and AbortSignal have been polyfilled for legacy Smart TV compatibility.");
         }
 
+        // Polyfill ResizeObserver (highly required by framer-motion and charts)
+        if (typeof window.ResizeObserver === 'undefined') {
+          window.ResizeObserver = function(callback) {
+            this.observe = function(target) {
+              // Minimal mock to avoid crashes
+            };
+            this.unobserve = function(target) {
+              // Minimal mock to avoid crashes
+            };
+            this.disconnect = function() {
+              // Minimal mock to avoid crashes
+            };
+          };
+          console.log("ResizeObserver has been polyfilled for legacy Smart TV compatibility.");
+        }
+
+        // Polyfill IntersectionObserver (highly required by lazy images and animation libraries)
+        if (typeof window.IntersectionObserver === 'undefined') {
+          window.IntersectionObserver = function(callback, options) {
+            this.observe = function(target) {
+              // Minimal mock that immediately reports intersection to avoid breaking layouts
+              if (typeof callback === 'function') {
+                try {
+                  callback([{
+                    target: target,
+                    isIntersecting: true,
+                    intersectionRatio: 1.0,
+                    boundingClientRect: target.getBoundingClientRect()
+                  }], this);
+                } catch (e) {
+                  console.error("IntersectionObserver callback failed:", e);
+                }
+              }
+            };
+            this.unobserve = function(target) {
+              // Minimal mock
+            };
+            this.disconnect = function() {
+              // Minimal mock
+            };
+          };
+          console.log("IntersectionObserver has been polyfilled for legacy Smart TV compatibility.");
+        }
+
+        // Polyfill ES6 Array.prototype.flat for old JS engines
+        if (!Array.prototype.flat) {
+          Array.prototype.flat = function(depth) {
+            var d = depth || 1;
+            return d > 0 ? this.reduce(function (acc, val) {
+              return acc.concat(Array.isArray(val) ? val.flat(d - 1) : val);
+            }, []) : this.slice();
+          };
+          console.log("Array.prototype.flat has been polyfilled.");
+        }
+
+        // Polyfill Object.values and Object.entries for old JS engines
+        if (!Object.values) {
+          Object.values = function(obj) {
+            if (obj === undefined || obj === null) {
+              throw new TypeError("Cannot convert undefined or null to object");
+            }
+            return Object.keys(obj).map(function(key) { return obj[key]; });
+          };
+          console.log("Object.values has been polyfilled.");
+        }
+        if (!Object.entries) {
+          Object.entries = function(obj) {
+            if (obj === undefined || obj === null) {
+              throw new TypeError("Cannot convert undefined or null to object");
+            }
+            return Object.keys(obj).map(function(key) { return [key, obj[key]]; });
+          };
+          console.log("Object.entries has been polyfilled.");
+        }
+
+        // Polyfill String.prototype.padStart and padEnd for older JS engines
+        if (!String.prototype.padStart) {
+          String.prototype.padStart = function(targetLength, padString) {
+            var str = String(this);
+            padString = padString || ' ';
+            while (str.length < targetLength) {
+              str = padString + str;
+            }
+            return str;
+          };
+          console.log("String.prototype.padStart has been polyfilled.");
+        }
+        if (!String.prototype.padEnd) {
+          String.prototype.padEnd = function(targetLength, padString) {
+            var str = String(this);
+            padString = padString || ' ';
+            while (str.length < targetLength) {
+              str = str + padString;
+            }
+            return str;
+          };
+          console.log("String.prototype.padEnd has been polyfilled.");
+        }
+
+        // Setup error diagnostic display
         var errorLog = [];
         function showError(msg, file, line, col, err) {
           var consoleEl = document.getElementById('tv-error-console');
