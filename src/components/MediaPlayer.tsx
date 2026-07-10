@@ -7,15 +7,26 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import Hls from 'hls.js';
 import { MediaItem } from '../types';
+import { db } from '../lib/firebase';
+import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 
 interface MediaPlayerProps {
   item: MediaItem;
   initialProgress?: number;
   onClose: () => void;
   onProgressUpdate: (mediaId: string, progress: number, duration: number) => void;
+  cinecastMode?: 'normal' | 'receiver' | 'controller';
+  cinecastSessionId?: string;
 }
 
-export default function MediaPlayer({ item, initialProgress = 0, onClose, onProgressUpdate }: MediaPlayerProps) {
+export default function MediaPlayer({ 
+  item, 
+  initialProgress = 0, 
+  onClose, 
+  onProgressUpdate,
+  cinecastMode = 'normal',
+  cinecastSessionId
+}: MediaPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -152,19 +163,33 @@ export default function MediaPlayer({ item, initialProgress = 0, onClose, onProg
     };
   }, [item.id, item.url, item.type]);
 
-  // Handle auto-saving progress
+  // Handle auto-saving progress & CineCast Receiver status report
   useEffect(() => {
     if (!isPlaying || isWebPage) return;
 
-    const interval = setInterval(() => {
+    const interval = setInterval(async () => {
       const media = mediaRef.current;
       if (media && media.duration) {
-        onProgressUpdate(item.id, media.currentTime, media.duration);
+        onProgressUpdate(item.id, media.currentTime, media.duration || duration);
+        
+        // Report progress to CineCast controller
+        if (cinecastMode === 'receiver' && cinecastSessionId) {
+          try {
+            await updateDoc(doc(db, 'cinecast_sessions', cinecastSessionId), {
+              progress: media.currentTime,
+              duration: media.duration || duration,
+              isPlaying: true,
+              updatedAt: new Date().toISOString()
+            });
+          } catch (e) {
+            console.error("Failed to report CineCast progress:", e);
+          }
+        }
       }
-    }, 3000);
+    }, 2000);
 
     return () => clearInterval(interval);
-  }, [isPlaying, item.id, mediaRef]);
+  }, [isPlaying, item.id, mediaRef, cinecastMode, cinecastSessionId, duration]);
 
   // Handle mouse move to show/hide video controls
   useEffect(() => {
@@ -303,7 +328,7 @@ export default function MediaPlayer({ item, initialProgress = 0, onClose, onProg
     setIsPlaying(false);
   };
 
-  const togglePlay = () => {
+  const togglePlay = async () => {
     const media = mediaRef.current;
     if (!media) return;
 
@@ -311,12 +336,71 @@ export default function MediaPlayer({ item, initialProgress = 0, onClose, onProg
       media.pause();
       setIsPlaying(false);
       onProgressUpdate(item.id, media.currentTime, media.duration || duration);
+      if (cinecastMode === 'receiver' && cinecastSessionId) {
+        try {
+          await updateDoc(doc(db, 'cinecast_sessions', cinecastSessionId), {
+            isPlaying: false,
+            updatedAt: new Date().toISOString()
+          });
+        } catch (e) {}
+      }
     } else {
       media.play()
-        .then(() => setIsPlaying(true))
+        .then(async () => {
+          setIsPlaying(true);
+          if (cinecastMode === 'receiver' && cinecastSessionId) {
+            try {
+              await updateDoc(doc(db, 'cinecast_sessions', cinecastSessionId), {
+                isPlaying: true,
+                updatedAt: new Date().toISOString()
+              });
+            } catch (e) {}
+          }
+        })
         .catch(handleError);
     }
   };
+
+  // Receiver Sync: Listen to commands from CineCast Controller
+  useEffect(() => {
+    if (cinecastMode !== 'receiver' || !cinecastSessionId) return;
+
+    const sessionDocRef = doc(db, 'cinecast_sessions', cinecastSessionId);
+    let lastProcessedCommandId = '';
+
+    const unsubscribe = onSnapshot(sessionDocRef, (snapshot) => {
+      if (!snapshot.exists()) return;
+      const data = snapshot.data();
+      
+      const media = mediaRef.current;
+      if (!media) return;
+
+      // Only act on a new command ID
+      if (data.command && data.commandId && data.commandId !== lastProcessedCommandId) {
+        lastProcessedCommandId = data.commandId;
+        console.log("CineCast remote command received:", data.command, data.commandArg);
+
+        if (data.command === 'play') {
+          media.play().then(() => setIsPlaying(true)).catch(handleError);
+        } else if (data.command === 'pause') {
+          media.pause();
+          setIsPlaying(false);
+        } else if (data.command === 'seek' && typeof data.commandArg === 'number') {
+          media.currentTime = data.commandArg;
+          setCurrentTime(data.commandArg);
+        } else if (data.command === 'volume' && typeof data.commandArg === 'number') {
+          setVolume(data.commandArg);
+          media.volume = data.commandArg;
+        } else if (data.command === 'stop') {
+          handleClose();
+        }
+      }
+    }, (error) => {
+      console.error("CineCast command subscription error:", error);
+    });
+
+    return () => unsubscribe();
+  }, [cinecastMode, cinecastSessionId, mediaRef]);
 
   const seekRelative = (seconds: number) => {
     const media = mediaRef.current;

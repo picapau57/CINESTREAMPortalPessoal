@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   Film, Music, Tv, FileAudio, Heart, LayoutGrid, Plus, 
   Search, Sparkles, User, Database, Info, RefreshCw,
-  Video, Eye, Play, Star, ChevronRight, Cloud, CloudOff
+  Video, Eye, Play, Star, ChevronRight, Cloud, CloudOff,
+  RotateCcw, RotateCw, Volume2, X, Pause
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MediaItem, PlaybackState, CategoryFilter } from './types';
@@ -45,11 +46,56 @@ export default function App() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isCloudSynced, setIsCloudSynced] = useState(false);
   
+  // --- CINECAST CASTING STATES ---
+  const [cinecastMode, setCinecastMode] = useState<'normal' | 'receiver' | 'controller'>(() => {
+    return (localStorage.getItem('cinecast_mode') as 'normal' | 'receiver' | 'controller') || 'normal';
+  });
+  const [cinecastSessionId, setCinecastSessionId] = useState<string>(() => {
+    return localStorage.getItem('cinecast_session_id') || 'SALA_PRINCIPAL';
+  });
+  const [activeSessionData, setActiveSessionData] = useState<any>(null);
+
   // Custom interactive stat/info box toggle
   const [showStats, setShowStats] = useState(false);
 
   // User details for personalization
   const userEmail = "picapauinformatica@gmail.com";
+
+  // --- CINECAST REALTIME SYNC EFFECT ---
+  useEffect(() => {
+    localStorage.setItem('cinecast_mode', cinecastMode);
+    localStorage.setItem('cinecast_session_id', cinecastSessionId);
+
+    const sessionDocRef = doc(db, 'cinecast_sessions', cinecastSessionId);
+
+    const unsubscribe = onSnapshot(sessionDocRef, (snapshot) => {
+      if (!snapshot.exists()) {
+        setActiveSessionData(null);
+        return;
+      }
+      
+      const data = snapshot.data();
+      setActiveSessionData(data);
+
+      // If we are the TV / Receiver
+      if (cinecastMode === 'receiver') {
+        if (data.activeMediaItem) {
+          // Play the item sent by controller
+          if (!activeMediaItem || activeMediaItem.id !== data.activeMediaItem.id) {
+            setActiveMediaItem(data.activeMediaItem);
+            setInitialPlayhead(data.commandArg || 0);
+          }
+        } else {
+          // Stop/close player if controller stopped casting
+          setActiveMediaItem(null);
+        }
+      }
+    }, (error) => {
+      console.error("CineCast session sync error:", error);
+    });
+
+    return () => unsubscribe();
+  }, [cinecastMode, cinecastSessionId, activeMediaItem]);
 
   // --- INITIALIZATION (FIREBASE SYNCHRONIZATION) ---
   useEffect(() => {
@@ -249,7 +295,7 @@ export default function App() {
     }
   };
 
-  const handleSelectMedia = (item: MediaItem, customProgress?: number) => {
+  const handleSelectMedia = async (item: MediaItem, customProgress?: number) => {
     // If progress is supplied (from resume list), use it. Otherwise, lookup saved progress
     let startAt = 0;
     if (customProgress !== undefined) {
@@ -265,8 +311,31 @@ export default function App() {
       }
     }
     
-    setInitialPlayhead(startAt);
-    setActiveMediaItem(item);
+    if (cinecastMode === 'controller') {
+      // Cast the stream to the TV!
+      try {
+        await setDoc(doc(db, 'cinecast_sessions', cinecastSessionId), {
+          id: cinecastSessionId,
+          activeMediaId: item.id,
+          activeMediaItem: item,
+          command: 'play',
+          commandArg: startAt,
+          commandId: Date.now().toString(),
+          progress: startAt,
+          duration: 0,
+          isPlaying: true,
+          volume: 0.8,
+          updatedAt: new Date().toISOString()
+        });
+      } catch (e) {
+        console.error("Failed to cast media to Firestore:", e);
+        alert("Erro ao transmitir. Verifique sua conexão.");
+      }
+    } else {
+      // Normal local playback
+      setInitialPlayhead(startAt);
+      setActiveMediaItem(item);
+    }
   };
 
   // --- COMPUTED PROPERTIES / FILTERING ---
@@ -334,6 +403,63 @@ export default function App() {
             <Plus size={16} strokeWidth={2.5} />
             ADICIONAR MÍDIA
           </button>
+        </div>
+
+        {/* ================= CINECAST REMOTE SYNC PANEL ================= */}
+        <div className="px-4 py-4 border-b border-white/5 bg-zinc-950/40">
+          <div className="flex items-center gap-1.5 mb-2">
+            <Sparkles size={14} className="text-blue-400 animate-pulse" />
+            <span className="text-[10.5px] font-bold text-zinc-300 uppercase tracking-wider">CineCast Sincronização</span>
+          </div>
+          
+          {/* Mode Selector pills */}
+          <div className="grid grid-cols-3 gap-1 p-0.5 bg-[#0f0f15] rounded-lg border border-white/5 mb-3">
+            <button
+              onClick={() => setCinecastMode('normal')}
+              className={`py-1 text-[9px] font-bold rounded transition cursor-pointer ${
+                cinecastMode === 'normal'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-zinc-500 hover:text-zinc-350'
+              }`}
+              title="Modo normal de reprodução no próprio dispositivo"
+            >
+              Normal
+            </button>
+            <button
+              onClick={() => setCinecastMode('receiver')}
+              className={`py-1 text-[9px] font-bold rounded transition cursor-pointer ${
+                cinecastMode === 'receiver'
+                  ? 'bg-blue-600 text-white animate-pulse'
+                  : 'text-zinc-500 hover:text-zinc-350'
+              }`}
+              title="Transformar esta tela em um Receptor (TV)"
+            >
+              Tela (TV)
+            </button>
+            <button
+              onClick={() => setCinecastMode('controller')}
+              className={`py-1 text-[9px] font-bold rounded transition cursor-pointer ${
+                cinecastMode === 'controller'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-zinc-500 hover:text-zinc-350'
+              }`}
+              title="Usar este dispositivo como Controle Remoto / Cast"
+            >
+              Controle
+            </button>
+          </div>
+
+          {/* Session ID / Room Field */}
+          <div className="space-y-1">
+            <label className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider block">Canal da TV (Room ID)</label>
+            <input
+              type="text"
+              value={cinecastSessionId}
+              onChange={(e) => setCinecastSessionId(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ''))}
+              placeholder="Ex: SALA_PRINCIPAL"
+              className="w-full bg-[#0c0c12]/80 border border-white/5 rounded-lg py-1.5 px-2.5 text-[10px] text-white font-mono uppercase focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+            />
+          </div>
         </div>
 
         {/* Categories / Filters Navigation */}
@@ -485,198 +611,274 @@ export default function App() {
 
       {/* ================= MAIN CONTENT SPACE ================= */}
       <main className="flex-1 flex flex-col min-w-0 bg-transparent relative z-10">
-        
-        {/* Top Header / Search bar bar */}
-        <header className="h-16 border-b border-white/5 px-6 flex items-center justify-between gap-4 z-10 bg-[#08080a]/65 backdrop-blur-md sticky top-0">
-          
-          {/* Search container */}
-          <div className="flex-1 max-w-lg relative">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" size={15} />
-            <input 
-              type="text" 
-              placeholder="Pesquisar canais, filmes, músicas ou podcasts..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-[#12121a]/60 hover:bg-[#161622] border border-white/5 rounded-full py-1.5 pl-10 pr-4 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 transition-all duration-300"
-            />
-          </div>
+        {cinecastMode === 'receiver' && !activeMediaItem ? (
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-[#07070a] relative overflow-hidden select-none">
+            {/* Animated radar circles */}
+            <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none">
+              <div className="w-[800px] h-[800px] rounded-full border-4 border-blue-500 animate-ping duration-[6s] absolute" />
+              <div className="w-[500px] h-[500px] rounded-full border-2 border-indigo-500 animate-pulse duration-[4s] absolute" />
+              <div className="w-[300px] h-[300px] rounded-full border border-blue-400 absolute" />
+            </div>
 
-          {/* Settings & Info toggles */}
-          <div className="flex items-center gap-3">
-            
-            {/* Cloud Sync Status Badge */}
-            {isCloudSynced ? (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-[10px] font-bold select-none shadow-sm">
-                <Cloud size={13} className="text-emerald-400 animate-pulse" />
-                <span className="hidden sm:inline">Sincronizado</span>
+            <div className="max-w-2xl space-y-8 relative z-10">
+              <div className="inline-flex p-5 rounded-3xl bg-gradient-to-tr from-blue-600/20 to-indigo-600/20 border border-blue-500/30 text-blue-400 shadow-2xl animate-pulse shadow-blue-500/10">
+                <Tv size={56} className="stroke-[1.5]" />
               </div>
-            ) : (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-yellow-500/10 border border-yellow-500/25 text-yellow-500 text-[10px] font-bold select-none shadow-sm">
-                <CloudOff size={13} className="animate-pulse" />
-                <span className="hidden sm:inline">Conectando...</span>
-              </div>
-            )}
 
-            {/* Quick stats panel toggle */}
-            <button
-              onClick={() => setShowStats(!showStats)}
-              className={`p-2 rounded-xl border transition-all cursor-pointer ${
-                showStats 
-                  ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' 
-                  : 'bg-white/5 border-white/5 text-zinc-400 hover:text-white hover:bg-white/10'
-              }`}
-              title="Exibir Estatísticas da Biblioteca"
-            >
-              <Database size={15} />
-            </button>
-
-            {/* Restore defaults backup */}
-            <button
-              onClick={handleResetToDefaults}
-              className="p-2 rounded-xl bg-white/5 border border-white/5 text-zinc-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
-              title="Restaurar Mídias Padrões"
-            >
-              <RefreshCw size={15} />
-            </button>
-
-          </div>
-        </header>
-
-        {/* Main Scrolling Body */}
-        <div className="flex-1 p-6 space-y-6 overflow-y-auto">
-
-          {/* Interactive Statistics Banner */}
-          <AnimatePresence>
-            {showStats && (
-              <motion.div
-                initial={{ opacity: 0, height: 0, y: -10 }}
-                animate={{ opacity: 1, height: 'auto', y: 0 }}
-                exit={{ opacity: 0, height: 0, y: -10 }}
-                className="overflow-hidden"
-              >
-                <div className="p-4 bg-[#0c0c10]/90 backdrop-blur-md border border-white/5 rounded-2xl grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
-                  <div className="space-y-1 py-1.5">
-                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Total de Mídias</p>
-                    <p className="text-xl font-black text-white font-mono">{totalItems}</p>
-                  </div>
-                  <div className="space-y-1 py-1.5 border-l border-white/5">
-                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Filmes e Séries</p>
-                    <p className="text-xl font-black text-blue-400 font-mono">{videoCount}</p>
-                  </div>
-                  <div className="space-y-1 py-1.5 border-l border-white/5">
-                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Áudios & Podcasts</p>
-                    <p className="text-xl font-black text-cyan-400 font-mono">{audioCount}</p>
-                  </div>
-                  <div className="space-y-1 py-1.5 border-l border-white/5">
-                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Favoritados</p>
-                    <p className="text-xl font-black text-red-500 font-mono">{favoriteCount}</p>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Continue Watching Section */}
-          <ResumePlayingList 
-            items={mediaItems}
-            playbackStates={playbackStates}
-            onSelectMedia={handleSelectMedia}
-            onClearProgress={handleClearProgress}
-          />
-
-          {/* CURATED HERO BANNER */}
-          {featuredItem && activeCategory === 'all' && !searchQuery && (
-            <div className="relative rounded-2xl overflow-hidden aspect-[21/9] bg-[#0c0c10] border border-white/5 shadow-2xl flex items-end">
-              {/* Background Cover */}
-              {featuredItem.thumbnailUrl ? (
-                <img 
-                  src={featuredItem.thumbnailUrl} 
-                  alt={featuredItem.title} 
-                  className="absolute inset-0 w-full h-full object-cover brightness-[0.4]"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-950/20 to-zinc-950" />
-              )}
-              {/* Cinematic Vignette */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
-
-              {/* Banner Info */}
-              <div className="relative p-6 sm:p-8 md:max-w-[65%] space-y-3 z-10">
-                <div className="flex items-center gap-2">
-                  <span className="text-[9px] uppercase tracking-wider font-extrabold px-2.5 py-0.5 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-400">
-                    Destaque da Lista
-                  </span>
-                  <span className="text-[9px] uppercase tracking-wider font-extrabold px-2.5 py-0.5 rounded-full bg-white/5 border border-white/5 text-zinc-300">
-                    {featuredItem.category}
-                  </span>
-                </div>
-                <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white line-clamp-1 leading-none">{featuredItem.title}</h2>
-                <p className="text-xs text-zinc-300 leading-relaxed line-clamp-2 max-w-xl">
-                  {featuredItem.description}
+              <div className="space-y-3">
+                <h2 className="text-3xl font-black tracking-tight text-white uppercase">
+                  Receptor CineCast <span className="text-blue-500">Ativo</span>
+                </h2>
+                <p className="text-sm text-zinc-400 leading-relaxed max-w-lg mx-auto font-medium">
+                  Esta tela está configurada como receptor de streaming para sua Smart TV ou TV Box.
                 </p>
-                <div className="flex items-center gap-3 pt-1">
-                  <button
-                    onClick={() => handleSelectMedia(featuredItem)}
-                    className="px-5 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-xs flex items-center gap-2 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40 transition-all cursor-pointer"
-                  >
-                    <Play size={14} fill="currentColor" /> ASSISTIR AGORA
-                  </button>
-                  <button
-                    onClick={() => handleToggleFavorite(featuredItem.id)}
-                    className={`p-2 rounded-xl border transition-all cursor-pointer ${
-                      featuredItem.isFavorite 
-                        ? 'bg-red-500/10 border-red-500/30 text-red-500' 
-                        : 'bg-white/5 border border-white/5 text-zinc-300 hover:text-white hover:bg-white/10'
-                    }`}
-                  >
-                    <Heart size={14} fill={featuredItem.isFavorite ? "currentColor" : "none"} />
-                  </button>
+              </div>
+
+              {/* Status Code Block */}
+              <div className="p-6 bg-zinc-950/80 border border-white/5 rounded-2xl max-w-md mx-auto space-y-4 shadow-xl">
+                <div>
+                  <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">ID do Canal Conectado</span>
+                  <span className="text-2xl font-black text-blue-400 font-mono uppercase tracking-widest mt-1 block">
+                    {cinecastSessionId}
+                  </span>
+                </div>
+                
+                <div className="h-px bg-white/5" />
+
+                <div className="flex items-center justify-center gap-2 text-xs text-zinc-400">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>Aguardando conexões e comandos...</span>
                 </div>
               </div>
-            </div>
-          )}
 
-          {/* Primary Library Header Section */}
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-black tracking-tight capitalize">
-                {activeCategory === 'all' 
-                  ? 'Catálogo Completo' 
-                  : activeCategory === 'favorites' 
-                    ? 'Minha Lista Pessoal' 
-                    : activeCategory === 'canais' 
-                      ? 'Canais Live & Streams' 
-                      : activeCategory
-                }
-              </h2>
-              <p className="text-xs text-zinc-500">
-                {activeCategory === 'favorites' 
-                  ? 'Suas transmissões preferidas salvas localmente' 
-                  : 'Navegue pelos seus arquivos de áudio e vídeo adicionados'
-                }
-              </p>
-            </div>
-            
-            {/* Display Mode Indicator */}
-            <div className="text-[10px] text-zinc-500 font-bold bg-white/5 border border-white/5 px-3 py-1 rounded-full uppercase tracking-wider select-none flex items-center gap-1">
-              <Eye size={12} /> {filteredItems.length} mídias
+              {/* Step-by-step instructions */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl mx-auto text-left">
+                <div className="p-4 bg-white/5 border border-white/5 rounded-xl space-y-2">
+                  <div className="text-xs font-black text-blue-400 flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-[10px]">1</span>
+                    <span>No seu Celular ou PC:</span>
+                  </div>
+                  <p className="text-[11px] text-zinc-400">
+                    Abra o mesmo portal de streaming e mude a chave CineCast para <strong className="text-white">"Controle"</strong> no menu lateral.
+                  </p>
+                </div>
+                <div className="p-4 bg-white/5 border border-white/5 rounded-xl space-y-2">
+                  <div className="text-xs font-black text-indigo-400 flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-[10px]">2</span>
+                    <span>Toque para Jogar:</span>
+                  </div>
+                  <p className="text-[11px] text-zinc-400">
+                    Certifique-se de usar o ID <strong className="text-white">{cinecastSessionId}</strong> e clique em qualquer canal ou filme para transmitir instantaneamente nesta tela!
+                  </p>
+                </div>
+              </div>
+
+              {/* Button to go back */}
+              <div>
+                <button
+                  onClick={() => setCinecastMode('normal')}
+                  className="px-5 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-400 hover:text-white transition-all text-xs font-bold cursor-pointer"
+                >
+                  Voltar para Modo Normal (Lista Local)
+                </button>
+              </div>
             </div>
           </div>
+        ) : (
+          <>
+            {/* Top Header / Search bar bar */}
+            <header className="h-16 border-b border-white/5 px-6 flex items-center justify-between gap-4 z-10 bg-[#08080a]/65 backdrop-blur-md sticky top-0">
+              
+              {/* Search container */}
+              <div className="flex-1 max-w-lg relative">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" size={15} />
+                <input 
+                  type="text" 
+                  placeholder="Pesquisar canais, filmes, músicas ou podcasts..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-[#12121a]/60 hover:bg-[#161622] border border-white/5 rounded-full py-1.5 pl-10 pr-4 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 transition-all duration-300"
+                />
+              </div>
 
-          {/* Media Grid Catalogue */}
-          <MediaGrid 
-            items={filteredItems}
-            playbackStates={playbackStates}
-            activeCategory={activeCategory}
-            searchQuery={searchQuery}
-            onSelectMedia={handleSelectMedia}
-            onToggleFavorite={handleToggleFavorite}
-            onDeleteMedia={handleDeleteMedia}
-            onOpenAddModal={() => setIsAddModalOpen(true)}
-          />
+              {/* Settings & Info toggles */}
+              <div className="flex items-center gap-3">
+                
+                {/* Cloud Sync Status Badge */}
+                {isCloudSynced ? (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-[10px] font-bold select-none shadow-sm">
+                    <Cloud size={13} className="text-emerald-400 animate-pulse" />
+                    <span className="hidden sm:inline">Sincronizado</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-yellow-500/10 border border-yellow-500/25 text-yellow-500 text-[10px] font-bold select-none shadow-sm">
+                    <CloudOff size={13} className="animate-pulse" />
+                    <span className="hidden sm:inline">Conectando...</span>
+                  </div>
+                )}
 
-        </div>
+                {/* Quick stats panel toggle */}
+                <button
+                  onClick={() => setShowStats(!showStats)}
+                  className={`p-2 rounded-xl border transition-all cursor-pointer ${
+                    showStats 
+                      ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' 
+                      : 'bg-white/5 border-white/5 text-zinc-400 hover:text-white hover:bg-white/10'
+                  }`}
+                  title="Exibir Estatísticas da Biblioteca"
+                >
+                  <Database size={15} />
+                </button>
+
+                {/* Restore defaults backup */}
+                <button
+                  onClick={handleResetToDefaults}
+                  className="p-2 rounded-xl bg-white/5 border border-white/5 text-zinc-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+                  title="Restaurar Mídias Padrões"
+                >
+                  <RefreshCw size={15} />
+                </button>
+
+              </div>
+            </header>
+
+            {/* Main Scrolling Body */}
+            <div className="flex-1 p-6 space-y-6 overflow-y-auto">
+
+              {/* Interactive Statistics Banner */}
+              <AnimatePresence>
+                {showStats && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0, y: -10 }}
+                    animate={{ opacity: 1, height: 'auto', y: 0 }}
+                    exit={{ opacity: 0, height: 0, y: -10 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="p-4 bg-[#0c0c10]/90 backdrop-blur-md border border-white/5 rounded-2xl grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
+                      <div className="space-y-1 py-1.5">
+                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Total de Mídias</p>
+                        <p className="text-xl font-black text-white font-mono">{totalItems}</p>
+                      </div>
+                      <div className="space-y-1 py-1.5 border-l border-white/5">
+                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Filmes e Séries</p>
+                        <p className="text-xl font-black text-blue-400 font-mono">{videoCount}</p>
+                      </div>
+                      <div className="space-y-1 py-1.5 border-l border-white/5">
+                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Áudios & Podcasts</p>
+                        <p className="text-xl font-black text-cyan-400 font-mono">{audioCount}</p>
+                      </div>
+                      <div className="space-y-1 py-1.5 border-l border-white/5">
+                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Favoritados</p>
+                        <p className="text-xl font-black text-red-500 font-mono">{favoriteCount}</p>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Continue Watching Section */}
+              <ResumePlayingList 
+                items={mediaItems}
+                playbackStates={playbackStates}
+                onSelectMedia={handleSelectMedia}
+                onClearProgress={handleClearProgress}
+              />
+
+              {/* CURATED HERO BANNER */}
+              {featuredItem && activeCategory === 'all' && !searchQuery && (
+                <div className="relative rounded-2xl overflow-hidden aspect-[21/9] bg-[#0c0c10] border border-white/5 shadow-2xl flex items-end">
+                  {/* Background Cover */}
+                  {featuredItem.thumbnailUrl ? (
+                    <img 
+                      src={featuredItem.thumbnailUrl} 
+                      alt={featuredItem.title} 
+                      className="absolute inset-0 w-full h-full object-cover brightness-[0.4]"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 bg-gradient-to-br from-blue-950/20 to-zinc-950" />
+                  )}
+                  {/* Cinematic Vignette */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
+
+                  {/* Banner Info */}
+                  <div className="relative p-6 sm:p-8 md:max-w-[65%] space-y-3 z-10">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] uppercase tracking-wider font-extrabold px-2.5 py-0.5 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-400">
+                        Destaque da Lista
+                      </span>
+                      <span className="text-[9px] uppercase tracking-wider font-extrabold px-2.5 py-0.5 rounded-full bg-white/5 border border-white/5 text-zinc-300">
+                        {featuredItem.category}
+                      </span>
+                    </div>
+                    <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white line-clamp-1 leading-none">{featuredItem.title}</h2>
+                    <p className="text-xs text-zinc-300 leading-relaxed line-clamp-2 max-w-xl">
+                      {featuredItem.description}
+                    </p>
+                    <div className="flex items-center gap-3 pt-1">
+                      <button
+                        onClick={() => handleSelectMedia(featuredItem)}
+                        className="px-5 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-xs flex items-center gap-2 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40 transition-all cursor-pointer"
+                      >
+                        <Play size={14} fill="currentColor" /> ASSISTIR AGORA
+                      </button>
+                      <button
+                        onClick={() => handleToggleFavorite(featuredItem.id)}
+                        className={`p-2 rounded-xl border transition-all cursor-pointer ${
+                          featuredItem.isFavorite 
+                            ? 'bg-red-500/10 border-red-500/30 text-red-500' 
+                            : 'bg-white/5 border border-white/5 text-zinc-300 hover:text-white hover:bg-white/10'
+                        }`}
+                      >
+                        <Heart size={14} fill={featuredItem.isFavorite ? "currentColor" : "none"} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Primary Library Header Section */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-black tracking-tight capitalize">
+                    {activeCategory === 'all' 
+                      ? 'Catálogo Completo' 
+                      : activeCategory === 'favorites' 
+                        ? 'Minha Lista Pessoal' 
+                        : activeCategory === 'canais' 
+                          ? 'Canais Live & Streams' 
+                          : activeCategory
+                    }
+                  </h2>
+                  <p className="text-xs text-zinc-500">
+                    {activeCategory === 'favorites' 
+                      ? 'Suas transmissões preferidas salvas localmente' 
+                      : 'Navegue pelos seus arquivos de áudio e vídeo adicionados'
+                    }
+                  </p>
+                </div>
+                
+                {/* Display Mode Indicator */}
+                <div className="text-[10px] text-zinc-500 font-bold bg-white/5 border border-white/5 px-3 py-1 rounded-full uppercase tracking-wider select-none flex items-center gap-1">
+                  <Eye size={12} /> {filteredItems.length} mídias
+                </div>
+              </div>
+
+              {/* Media Grid Catalogue */}
+              <MediaGrid 
+                items={filteredItems}
+                playbackStates={playbackStates}
+                activeCategory={activeCategory}
+                searchQuery={searchQuery}
+                onSelectMedia={handleSelectMedia}
+                onToggleFavorite={handleToggleFavorite}
+                onDeleteMedia={handleDeleteMedia}
+                onOpenAddModal={() => setIsAddModalOpen(true)}
+              />
+
+            </div>
+          </>
+        )}
       </main>
 
       {/* ================= POPUP MODALS & IMPERATIVE FLOATING LAYOUTS ================= */}
@@ -687,11 +889,178 @@ export default function App() {
           <MediaPlayer 
             item={activeMediaItem}
             initialProgress={initialPlayhead}
-            onClose={() => setActiveMediaItem(null)}
+            onClose={async () => {
+              setActiveMediaItem(null);
+              // If we are the TV (Receiver), clear the session so controller is notified
+              if (cinecastMode === 'receiver') {
+                try {
+                  await setDoc(doc(db, 'cinecast_sessions', cinecastSessionId), {
+                    id: cinecastSessionId,
+                    activeMediaId: null,
+                    activeMediaItem: null,
+                    command: 'stop',
+                    commandId: Date.now().toString(),
+                    isPlaying: false,
+                    updatedAt: new Date().toISOString()
+                  });
+                } catch (e) {
+                  console.error("Failed to clear CineCast session on receiver player close:", e);
+                }
+              }
+            }}
             onProgressUpdate={handleProgressUpdate}
+            cinecastMode={cinecastMode}
+            cinecastSessionId={cinecastSessionId}
           />
         )}
       </AnimatePresence>
+
+      {/* ================= CINECAST CONTROLLER FLOATING PANEL ================= */}
+      {cinecastMode === 'controller' && activeSessionData && activeSessionData.activeMediaItem && (
+        <div className="fixed bottom-4 left-4 right-4 md:left-72 md:right-8 z-40 p-4 bg-[#0c0c10]/95 backdrop-blur-md border border-blue-500/30 rounded-2xl shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in slide-in-from-bottom-4 duration-300 text-white">
+          
+          {/* Media Info */}
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-zinc-950 border border-white/10 shrink-0">
+              {activeSessionData.activeMediaItem.thumbnailUrl ? (
+                <img 
+                  src={activeSessionData.activeMediaItem.thumbnailUrl} 
+                  alt={activeSessionData.activeMediaItem.title} 
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-gradient-to-tr from-blue-900 to-indigo-900 text-white font-bold text-xs">
+                  {activeSessionData.activeMediaItem.type === 'video' ? <Tv size={16} /> : <Music size={16} />}
+                </div>
+              )}
+              {/* Spinning cast wave */}
+              <div className="absolute inset-0 bg-blue-500/20 flex items-center justify-center">
+                <span className="flex h-2 w-2 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                </span>
+              </div>
+            </div>
+            
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1">
+                <span>Casting para</span>
+                <span className="font-mono bg-blue-500/10 px-1.5 py-0.2 rounded border border-blue-500/20 text-[9px]">{cinecastSessionId}</span>
+              </div>
+              <h4 className="text-xs font-bold text-white truncate leading-tight mt-0.5">{activeSessionData.activeMediaItem.title}</h4>
+              <p className="text-[9px] text-zinc-500 truncate">{activeSessionData.activeMediaItem.description}</p>
+            </div>
+          </div>
+
+          {/* Player controls */}
+          <div className="flex items-center gap-3 shrink-0">
+            {/* Seek Back */}
+            <button
+              onClick={async () => {
+                const currentProg = activeSessionData.progress || 0;
+                const newProg = Math.max(0, currentProg - 10);
+                await updateDoc(doc(db, 'cinecast_sessions', cinecastSessionId), {
+                  command: 'seek',
+                  commandArg: newProg,
+                  commandId: Date.now().toString(),
+                  updatedAt: new Date().toISOString()
+                });
+              }}
+              className="p-2 rounded-xl bg-white/5 border border-white/5 text-zinc-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+              title="Voltar 10 segundos"
+            >
+              <RotateCcw size={14} />
+            </button>
+
+            {/* Play / Pause Toggle */}
+            <button
+              onClick={async () => {
+                const isPlayingNow = activeSessionData.isPlaying;
+                await updateDoc(doc(db, 'cinecast_sessions', cinecastSessionId), {
+                  command: isPlayingNow ? 'pause' : 'play',
+                  commandId: Date.now().toString(),
+                  isPlaying: !isPlayingNow,
+                  updatedAt: new Date().toISOString()
+                });
+              }}
+              className="p-3 rounded-full bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40 transition-all cursor-pointer"
+            >
+              {activeSessionData.isPlaying ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}
+            </button>
+
+            {/* Seek Forward */}
+            <button
+              onClick={async () => {
+                const currentProg = activeSessionData.progress || 0;
+                const dur = activeSessionData.duration || 300;
+                const newProg = Math.min(dur, currentProg + 10);
+                await updateDoc(doc(db, 'cinecast_sessions', cinecastSessionId), {
+                  command: 'seek',
+                  commandArg: newProg,
+                  commandId: Date.now().toString(),
+                  updatedAt: new Date().toISOString()
+                });
+              }}
+              className="p-2 rounded-xl bg-white/5 border border-white/5 text-zinc-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+              title="Avançar 10 segundos"
+            >
+              <RotateCw size={14} />
+            </button>
+
+            {/* Volume Icon Button */}
+            <div className="flex items-center gap-1.5 pl-2 border-l border-white/10">
+              <Volume2 size={14} className="text-zinc-500" />
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={activeSessionData.volume !== undefined ? activeSessionData.volume : 0.8}
+                onChange={async (e) => {
+                  const vol = parseFloat(e.target.value);
+                  await updateDoc(doc(db, 'cinecast_sessions', cinecastSessionId), {
+                    command: 'volume',
+                    commandArg: vol,
+                    commandId: Date.now().toString(),
+                    volume: vol,
+                    updatedAt: new Date().toISOString()
+                  });
+                }}
+                className="w-16 h-1 bg-zinc-850 rounded-full appearance-none cursor-pointer accent-blue-500"
+              />
+            </div>
+
+            {/* Close/Stop Casting */}
+            <button
+              onClick={async () => {
+                await updateDoc(doc(db, 'cinecast_sessions', cinecastSessionId), {
+                  activeMediaId: null,
+                  activeMediaItem: null,
+                  command: 'stop',
+                  commandId: Date.now().toString(),
+                  isPlaying: false,
+                  updatedAt: new Date().toISOString()
+                });
+              }}
+              className="p-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-all cursor-pointer pl-3 pr-3 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider"
+              title="Parar de Transmitir"
+            >
+              <X size={12} strokeWidth={2.5} /> Parar Cast
+            </button>
+          </div>
+
+          {/* Live Progress timeline bar */}
+          <div className="absolute top-0 left-0 right-0 h-1 bg-zinc-800 rounded-t-2xl overflow-hidden">
+            <div 
+              className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-1000"
+              style={{ 
+                width: `${activeSessionData.duration ? (activeSessionData.progress / activeSessionData.duration) * 100 : 0}%` 
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Add Media Entry Form Modal Overlay */}
       <AnimatePresence>

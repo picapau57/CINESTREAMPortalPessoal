@@ -1,0 +1,66 @@
+{
+  "entities": {
+    "MediaItem": {
+      "title": "MediaItem",
+      "description": "Item de mídia adicionado ao portal (filme, série, canal, música ou podcast)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "url": { "type": "string" },
+        "thumbnailUrl": { "type": "string" },
+        "category": { "type": "string" },
+        "isFavorite": { "type": "boolean" },
+        "addedAt": { "type": "string" },
+        "type": { "type": "string" }
+      },
+      "required": ["id", "title", "url", "category", "isFavorite", "addedAt", "type"]
+    },
+    "PlaybackState": {
+      "title": "PlaybackState",
+      "description": "Estado e progresso de reprodução local ou remota de uma mídia",
+      "type": "object",
+      "properties": {
+        "mediaId": { "type": "string" },
+        "progress": { "type": "number" },
+        "duration": { "type": "number" },
+        "lastPlayedAt": { "type": "string" }
+      },
+      "required": ["mediaId", "progress", "duration", "lastPlayedAt"]
+    },
+    "CineCastSession": {
+      "title": "CineCastSession",
+      "description": "Sessão de transmissão CineCast para sincronização e controle remoto em tempo real de Smart TVs",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "activeMediaId": { "type": "string" },
+        "activeMediaItem": { "type": "object" },
+        "command": { "type": "string" },
+        "commandArg": { "type": "number" },
+        "commandId": { "type": "string" },
+        "progress": { "type": "number" },
+        "duration": { "type": "number" },
+        "isPlaying": { "type": "boolean" },
+        "volume": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/media_items/{mediaId}": {
+      "schema": "MediaItem",
+      "description": "Lista de mídias compartilhadas do portal"
+    },
+    "/playback_progress/{mediaId}": {
+      "schema": "PlaybackState",
+      "description": "Histórico de progresso de cada mídia para continuar assistindo"
+    },
+    "/cinecast_sessions/{sessionId}": {
+      "schema": "CineCastSession",
+      "description": "Controle e estado da transmissão CineCast entre dispositivos"
+    }
+  }
+}

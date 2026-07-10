@@ -21,3 +21,4 @@ export const db = initializeFirestore(app, {
 // Collection References
 export const mediaCollectionRef = collection(db, 'media_items');
 export const progressCollectionRef = collection(db, 'playback_progress');
+export const cinecastCollectionRef = collection(db, 'cinecast_sessions');
