@@ -70,7 +70,9 @@ export default defineConfig(() => {
           const es5Scripts = `
     <!-- Standard ES5 Fallbacks directly loaded for older Smart TVs / Philips TV Browser -->
     <script src="${polyfillUrl}"></script>
-    <script src="${entryUrl}"></script>
+    <script>
+      System.import('${entryUrl}');
+    </script>
 `;
           cleanHtml = cleanHtml.replace('</body>', `${es5Scripts}\n</body>`);
 
