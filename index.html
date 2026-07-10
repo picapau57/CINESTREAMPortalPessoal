@@ -48,6 +48,49 @@
           console.log("BigInt has been polyfilled for legacy Smart TV compatibility.");
         }
 
+        // Polyfill AbortController and AbortSignal for older Smart TV browsers
+        if (typeof window.AbortController === 'undefined') {
+          window.AbortSignal = function() {
+            this.aborted = false;
+            this._listeners = {};
+          };
+          window.AbortSignal.prototype.addEventListener = function(type, listener) {
+            if (!this._listeners[type]) this._listeners[type] = [];
+            this._listeners[type].push(listener);
+          };
+          window.AbortSignal.prototype.removeEventListener = function(type, listener) {
+            if (!this._listeners[type]) return;
+            var idx = this._listeners[type].indexOf(listener);
+            if (idx !== -1) this._listeners[type].splice(idx, 1);
+          };
+          window.AbortSignal.prototype.dispatchEvent = function(event) {
+            if (!this._listeners[event.type]) return;
+            var listeners = this._listeners[event.type].slice();
+            for (var i = 0; i < listeners.length; i++) {
+              listeners[i].call(this, event);
+            }
+          };
+
+          window.AbortController = function() {
+            this.signal = new window.AbortSignal();
+          };
+          window.AbortController.prototype.abort = function() {
+            if (this.signal.aborted) return;
+            this.signal.aborted = true;
+            var event;
+            try {
+              event = new Event('abort');
+            } catch (e) {
+              event = { type: 'abort', bubbles: false, cancelable: false };
+            }
+            this.signal.dispatchEvent(event);
+            if (typeof this.signal.onabort === 'function') {
+              this.signal.onabort(event);
+            }
+          };
+          console.log("AbortController and AbortSignal have been polyfilled for legacy Smart TV compatibility.");
+        }
+
         var errorLog = [];
         function showError(msg, file, line, col, err) {
           var consoleEl = document.getElementById('tv-error-console');
