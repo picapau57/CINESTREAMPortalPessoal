@@ -36,8 +36,22 @@ export default function MediaPlayer({ item, initialProgress = 0, onClose, onProg
 
   const mediaRef = item.type === 'video' ? videoRef : audioRef;
 
+  // Check if URL is a webpage/site (neither video nor audio direct stream)
+  const isWebPage = !item.url.toLowerCase().match(/\.(mp4|mkv|webm|avi|mov|m3u8|ts|mp3|wav|ogg|aac|m4a|flac|m3u)(\?|$)/i) && 
+                    (item.url.includes('.') || item.url.toLowerCase().startsWith('http'));
+
+  const getNormalizedUrl = (urlStr: string) => {
+    if (!urlStr) return '';
+    const trimmed = urlStr.trim();
+    if (!/^https?:\/\//i.test(trimmed)) {
+      return 'https://' + trimmed;
+    }
+    return trimmed;
+  };
+
   // Manage Video/Audio source loading, including HLS (.m3u8) streams
   useEffect(() => {
+    if (isWebPage) return; // Skip standard direct media loading for websites
     setErrorMsg(null);
     const isVideo = item.type === 'video';
     const isAudio = item.type === 'audio';
@@ -140,7 +154,7 @@ export default function MediaPlayer({ item, initialProgress = 0, onClose, onProg
 
   // Handle auto-saving progress
   useEffect(() => {
-    if (!isPlaying) return;
+    if (!isPlaying || isWebPage) return;
 
     const interval = setInterval(() => {
       const media = mediaRef.current;
@@ -495,8 +509,59 @@ export default function MediaPlayer({ item, initialProgress = 0, onClose, onProg
           </div>
         )}
 
+        {/* --- PORTAL WEB PAGE / BROWSER COMPONENT --- */}
+        {isWebPage && (
+          <div className="absolute inset-0 bg-gradient-to-b from-[#0c0c10] to-[#08080a] flex flex-col z-10 rounded-2xl overflow-hidden">
+            {/* Browser Navigation Bar */}
+            <div className="bg-[#12121a] px-4 py-3 border-b border-white/5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 select-none">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
+                <div className="w-2.5 h-2.5 rounded-full bg-yellow-500" />
+                <div className="w-2.5 h-2.5 rounded-full bg-green-500" />
+                <span className="text-zinc-500 font-mono text-xs px-2 select-none">|</span>
+                <span className="text-xs font-bold text-zinc-300 truncate">{item.title}</span>
+              </div>
+              
+              <div className="flex-1 max-w-xl mx-auto w-full bg-black/40 border border-white/5 rounded-lg px-3 py-1 flex items-center justify-between gap-2 text-[11px] text-zinc-400 font-mono truncate">
+                <span className="truncate select-all">{getNormalizedUrl(item.url)}</span>
+                <span className="text-zinc-600 text-[10px]">CORS/X-Frame Seguro</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <a 
+                  href={getNormalizedUrl(item.url)} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="px-3.5 py-1.5 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-[11px] font-bold shadow-md shadow-blue-500/10 flex items-center gap-1.5 transition active:scale-95 whitespace-nowrap"
+                >
+                  Abrir em Nova Guia ↗
+                </a>
+              </div>
+            </div>
+
+            {/* Smart Notice */}
+            <div className="bg-blue-500/10 border-b border-blue-500/20 px-4 py-2.5 text-[11px] text-blue-300 flex items-start gap-2 leading-relaxed">
+              <span className="text-base select-none mt-0.5">⚠️</span>
+              <div>
+                <strong className="text-white">Aviso sobre o site Google e similares:</strong> O Google e outros grandes portais impedem por segurança que suas páginas sejam exibidas dentro de outros sistemas (erro de "Recusa de Conexão" ou "Tela Branca"). Se o site não abrir ou ficar em branco abaixo, clique no botão <span className="font-bold text-white">"Abrir em Nova Guia ↗"</span> acima para usá-lo livremente sem restrições.
+              </div>
+            </div>
+
+            {/* Web Frame Viewport */}
+            <div className="flex-1 w-full bg-white relative">
+              <iframe 
+                src={getNormalizedUrl(item.url)} 
+                title={item.title}
+                className="w-full h-full border-none bg-white"
+                sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+          </div>
+        )}
+
         {/* --- VIDEO PLAYER COMPONENT --- */}
-        {item.type === 'video' && (
+        {item.type === 'video' && !isWebPage && (
           <video
             ref={videoRef}
             className="w-full h-full object-contain cursor-pointer"
@@ -509,7 +574,7 @@ export default function MediaPlayer({ item, initialProgress = 0, onClose, onProg
         )}
 
         {/* --- AUDIO PLAYER VISUALIZER --- */}
-        {item.type === 'audio' && (
+        {item.type === 'audio' && !isWebPage && (
           <div className="absolute inset-0 bg-gradient-to-b from-[#0c0c10]/95 to-[#08080a] flex flex-col items-center justify-center p-8">
             <audio
               ref={audioRef}
@@ -573,12 +638,13 @@ export default function MediaPlayer({ item, initialProgress = 0, onClose, onProg
         )}
 
         {/* --- CUSTOM OVERLAY CONTROLS --- */}
-        <AnimatePresence>
-          {showControls && (
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+        {!isWebPage && (
+          <AnimatePresence>
+            {showControls && (
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
               className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-black/60 flex flex-col justify-between p-4 pointer-events-none z-20"
             >
               {/* Top Bar Info */}
@@ -735,6 +801,7 @@ export default function MediaPlayer({ item, initialProgress = 0, onClose, onProg
             </motion.div>
           )}
         </AnimatePresence>
+        )}
       </div>
     </motion.div>
   );

@@ -319,8 +319,12 @@ export default function AddMediaModal({ onClose, onAdd }: AddMediaModalProps) {
     if (!url.trim()) {
       tempErrors.url = 'A URL de transmissão é obrigatória.';
     } else {
+      let testUrl = url.trim();
+      if (!/^https?:\/\//i.test(testUrl)) {
+        testUrl = 'https://' + testUrl;
+      }
       try {
-        new URL(url);
+        new URL(testUrl);
       } catch (_) {
         tempErrors.url = 'Insira uma URL válida (ex: https://site.com/video.mp4).';
       }
@@ -333,10 +337,15 @@ export default function AddMediaModal({ onClose, onAdd }: AddMediaModalProps) {
     e.preventDefault();
     if (!validateSingle()) return;
 
+    let finalUrl = url.trim();
+    if (!/^https?:\/\//i.test(finalUrl)) {
+      finalUrl = 'https://' + finalUrl;
+    }
+
     onAdd({
       title: title.trim(),
       description: description.trim() || 'Sem descrição fornecida.',
-      url: url.trim(),
+      url: finalUrl,
       thumbnailUrl: thumbnailUrl.trim() || undefined,
       category,
       type

@@ -110,19 +110,22 @@
         // Polyfill IntersectionObserver (highly required by lazy images and animation libraries)
         if (typeof window.IntersectionObserver === 'undefined') {
           window.IntersectionObserver = function(callback, options) {
+            var self = this;
             this.observe = function(target) {
-              // Minimal mock that immediately reports intersection to avoid breaking layouts
+              // Minimal mock that asynchronously reports intersection to avoid breaking React layout/effects
               if (typeof callback === 'function') {
-                try {
-                  callback([{
-                    target: target,
-                    isIntersecting: true,
-                    intersectionRatio: 1.0,
-                    boundingClientRect: target.getBoundingClientRect()
-                  }], this);
-                } catch (e) {
-                  console.error("IntersectionObserver callback failed:", e);
-                }
+                setTimeout(function() {
+                  try {
+                    callback([{
+                      target: target,
+                      isIntersecting: true,
+                      intersectionRatio: 1.0,
+                      boundingClientRect: (target && typeof target.getBoundingClientRect === 'function') ? target.getBoundingClientRect() : { top: 0, left: 0, width: 0, height: 0, bottom: 0, right: 0 }
+                    }], self);
+                  } catch (e) {
+                    console.error("IntersectionObserver callback failed:", e);
+                  }
+                }, 0);
               }
             };
             this.unobserve = function(target) {

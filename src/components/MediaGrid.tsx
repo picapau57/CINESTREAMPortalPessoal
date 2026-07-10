@@ -19,10 +19,12 @@ const CATEGORY_LABELS: Record<string, string> = {
   canais: 'Canal TV'
 };
 
-const getGradientStyle = (title: string, category: string) => {
+const getGradientStyle = (title: string | undefined | null, category: string | undefined | null) => {
+  const safeTitle = title || '';
+  const safeCategory = category || 'musicas';
   let hash = 0;
-  for (let i = 0; i < title.length; i++) {
-    hash = title.charCodeAt(i) + ((hash << 5) - hash);
+  for (let i = 0; i < safeTitle.length; i++) {
+    hash = safeTitle.charCodeAt(i) + ((hash << 5) - hash);
   }
   const index = Math.abs(hash) % 5;
   
@@ -42,7 +44,7 @@ const getGradientStyle = (title: string, category: string) => {
     podcasts: 'from-amber-600 via-orange-700 to-zinc-950'
   };
 
-  return categoryThemes[category] || gradients[index];
+  return categoryThemes[safeCategory] || gradients[index];
 };
 
 interface MediaGridProps {
