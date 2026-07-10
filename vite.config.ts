@@ -60,8 +60,8 @@ export default defineConfig(() => {
           // 3. Remove the legacy detector script and nomodule tags
           cleanHtml = cleanHtml.replace(/<script nomodule id="vite-legacy-polyfill"[^>]*><\/script>/g, '');
           cleanHtml = cleanHtml.replace(/<script nomodule id="vite-legacy-entry"[\s\S]*?<\/script>/g, '');
-          cleanHtml = cleanHtml.replace(/<script>\s*!function\(\)[\s\S]*?<\/script>/g, '');
-          cleanHtml = cleanHtml.replace(/<script>\s*\(function\(\)\{[\s\S]*?\}\)\(\);\s*<\/script>/g, '');
+          cleanHtml = cleanHtml.replace(/<script[^>]*>\s*!function\(\)[\s\S]*?<\/script>/g, '');
+          cleanHtml = cleanHtml.replace(/<script[^>]*>\s*\(function\(\)\{[\s\S]*?\}\)\(\);\s*<\/script>/g, '');
           
           // Remove any leftover nomodule tags or system js loaders that can fail on old engines
           cleanHtml = cleanHtml.replace(/<script nomodule[^>]*>([\s\S]*?)<\/script>/g, '');
