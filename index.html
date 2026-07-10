@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>My Google AI Studio App</title>
   </head>
-  <body>
+  <body style="background-color: #0c0c10; color: #ffffff; margin: 0; padding: 0;">
     <!-- Smart TV On-Screen Error Console for Diagnostics -->
     <div id="tv-error-console" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#121214; color:#ef4444; font-family:monospace; padding:30px; z-index:9999999; overflow:auto; box-sizing:border-box; border:5px solid #ef4444;">
       <h2 style="margin-top:0; color:#ffffff; border-bottom:1px solid #ef4444; padding-bottom:10px; font-size:20px;">⚠️ Erro de Compatibilidade na TV Philips</h2>
@@ -15,7 +15,32 @@
     </div>
     <script>
       (function() {
-        // Polyfill BigInt for older Smart TV browsers (e.g. Philips TV Browser / old Chrome)
+        // 1. Setup error diagnostic display at the VERY top of execution
+        var errorLog = [];
+        function showError(msg, file, line, col, err) {
+          var consoleEl = document.getElementById('tv-error-console');
+          var logEl = document.getElementById('tv-error-log');
+          if (consoleEl && logEl) {
+            consoleEl.style.display = 'block';
+            var errorMsg = msg + '\nArquivo: ' + file + '\nLinha: ' + line + (col ? ', Coluna: ' + col : '') + '\n';
+            if (err && err.stack) {
+              errorMsg += 'Stack: ' + err.stack + '\n';
+            }
+            errorLog.push(errorMsg);
+            logEl.textContent = errorLog.join('\n-------------------\n');
+          }
+        }
+        window.onerror = function(msg, file, line, col, err) {
+          showError(msg, file, line, col, err);
+          return false;
+        };
+        window.addEventListener('unhandledrejection', function(event) {
+          var reason = event.reason;
+          var msg = reason instanceof Error ? reason.message : String(reason);
+          showError('Unhandled Promise Rejection: ' + msg, 'Promise', 0, 0, reason instanceof Error ? reason : null);
+        });
+
+        // 2. Polyfill BigInt safely using ES5/ES3 compatible indexOf instead of startsWith (which crashes Chrome <41/old TVs)
         if (typeof window.BigInt === 'undefined') {
           window.BigInt = function(val) {
             if (val === undefined || val === null) {
@@ -23,7 +48,7 @@
             }
             if (typeof val === 'string') {
               val = val.replace(/n$/, '');
-              if (val.startsWith('0x') || val.startsWith('0X')) {
+              if (val.indexOf('0x') === 0 || val.indexOf('0X') === 0) {
                 return parseInt(val, 16);
               }
               return parseInt(val, 10);
@@ -45,7 +70,7 @@
             var max = Math.pow(2, bits) - 1;
             return num > max ? max : (num < 0 ? 0 : num);
           };
-          console.log("BigInt has been polyfilled for legacy Smart TV compatibility.");
+          console.log("BigInt has been polyfilled safely for legacy Smart TV compatibility.");
         }
 
         // Polyfill AbortController and AbortSignal for older Smart TV browsers
@@ -192,31 +217,6 @@
           };
           console.log("String.prototype.padEnd has been polyfilled.");
         }
-
-        // Setup error diagnostic display
-        var errorLog = [];
-        function showError(msg, file, line, col, err) {
-          var consoleEl = document.getElementById('tv-error-console');
-          var logEl = document.getElementById('tv-error-log');
-          if (consoleEl && logEl) {
-            consoleEl.style.display = 'block';
-            var errorMsg = msg + '\nArquivo: ' + file + '\nLinha: ' + line + (col ? ', Coluna: ' + col : '') + '\n';
-            if (err && err.stack) {
-              errorMsg += 'Stack: ' + err.stack + '\n';
-            }
-            errorLog.push(errorMsg);
-            logEl.textContent = errorLog.join('\n-------------------\n');
-          }
-        }
-        window.onerror = function(msg, file, line, col, err) {
-          showError(msg, file, line, col, err);
-          return false;
-        };
-        window.addEventListener('unhandledrejection', function(event) {
-          var reason = event.reason;
-          var msg = reason instanceof Error ? reason.message : String(reason);
-          showError('Unhandled Promise Rejection: ' + msg, 'Promise', 0, 0, reason instanceof Error ? reason : null);
-        });
       })();
     </script>
 

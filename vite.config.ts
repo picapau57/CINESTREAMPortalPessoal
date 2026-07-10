@@ -8,7 +8,7 @@ export default defineConfig(() => {
     plugins: [
       react(), 
       legacy({
-        targets: ['chrome >= 49', 'safari >= 10', 'firefox >= 45', 'not IE 11'],
+        targets: ['chrome >= 30', 'safari >= 7', 'firefox >= 30', 'not IE 11'],
       }),
       {
         name: 'legacy-tv-postprocess',
