@@ -6,6 +6,41 @@
     <title>My Google AI Studio App</title>
   </head>
   <body>
+    <!-- Smart TV On-Screen Error Console for Diagnostics -->
+    <div id="tv-error-console" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#121214; color:#ef4444; font-family:monospace; padding:30px; z-index:9999999; overflow:auto; box-sizing:border-box; border:5px solid #ef4444;">
+      <h2 style="margin-top:0; color:#ffffff; border-bottom:1px solid #ef4444; padding-bottom:10px; font-size:20px;">⚠️ Erro de Compatibilidade na TV Philips</h2>
+      <p style="color:#a1a1aa; font-size:14px; margin-bottom:20px;">O navegador da sua TV encontrou um erro ao iniciar a aplicação. Por favor, tire uma foto desta tela para ajudar no diagnóstico:</p>
+      <pre id="tv-error-log" style="white-space:pre-wrap; background:#1a1a1e; padding:15px; border-radius:6px; color:#fca5a5; font-size:12px; line-height:1.6; border:1px solid #3f3f46;"></pre>
+      <button onclick="window.location.reload(true)" style="background:#ef4444; color:#ffffff; border:none; padding:10px 20px; font-size:14px; border-radius:4px; cursor:pointer; font-weight:bold; margin-top:15px;">Tentar Recarregar</button>
+    </div>
+    <script>
+      (function() {
+        var errorLog = [];
+        function showError(msg, file, line, col, err) {
+          var consoleEl = document.getElementById('tv-error-console');
+          var logEl = document.getElementById('tv-error-log');
+          if (consoleEl && logEl) {
+            consoleEl.style.display = 'block';
+            var errorMsg = msg + '\nArquivo: ' + file + '\nLinha: ' + line + (col ? ', Coluna: ' + col : '') + '\n';
+            if (err && err.stack) {
+              errorMsg += 'Stack: ' + err.stack + '\n';
+            }
+            errorLog.push(errorMsg);
+            logEl.textContent = errorLog.join('\n-------------------\n');
+          }
+        }
+        window.onerror = function(msg, file, line, col, err) {
+          showError(msg, file, line, col, err);
+          return false;
+        };
+        window.addEventListener('unhandledrejection', function(event) {
+          var reason = event.reason;
+          var msg = reason instanceof Error ? reason.message : String(reason);
+          showError('Unhandled Promise Rejection: ' + msg, 'Promise', 0, 0, reason instanceof Error ? reason : null);
+        });
+      })();
+    </script>
+
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
