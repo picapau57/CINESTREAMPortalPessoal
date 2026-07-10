@@ -13,6 +13,19 @@ export default defineConfig(() => {
       {
         name: 'legacy-tv-postprocess',
         enforce: 'post',
+        generateBundle(options, bundle) {
+          for (const fileName in bundle) {
+            if (fileName.endsWith('.css')) {
+              const asset = bundle[fileName];
+              if (asset.type === 'asset' && typeof asset.source === 'string') {
+                console.log('legacy-tv-postprocess: Cleaning up CSS file:', fileName);
+                // Strip all instances of :not(#\#), :not(#\\#), etc.
+                const cleanSource = asset.source.replace(/:not\(\s*#[^)]*\)/g, '');
+                asset.source = cleanSource;
+              }
+            }
+          }
+        },
         transformIndexHtml(html) {
           // Only modify during production build when legacy plugin has inserted scripts
           if (!html.includes('legacy') && !html.includes('nomodule')) {
