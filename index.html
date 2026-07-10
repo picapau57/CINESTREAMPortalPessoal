@@ -15,6 +15,39 @@
     </div>
     <script>
       (function() {
+        // Polyfill BigInt for older Smart TV browsers (e.g. Philips TV Browser / old Chrome)
+        if (typeof window.BigInt === 'undefined') {
+          window.BigInt = function(val) {
+            if (val === undefined || val === null) {
+              throw new TypeError("Cannot convert undefined or null to a BigInt");
+            }
+            if (typeof val === 'string') {
+              val = val.replace(/n$/, '');
+              if (val.startsWith('0x') || val.startsWith('0X')) {
+                return parseInt(val, 16);
+              }
+              return parseInt(val, 10);
+            }
+            var num = Number(val);
+            if (isNaN(num)) {
+              throw new SyntaxError("Cannot convert " + val + " to a BigInt");
+            }
+            return Math.floor(num);
+          };
+          window.BigInt.asIntN = function(bits, val) {
+            var num = Number(val);
+            var max = Math.pow(2, bits - 1) - 1;
+            var min = -Math.pow(2, bits - 1);
+            return num > max ? max : (num < min ? min : num);
+          };
+          window.BigInt.asUintN = function(bits, val) {
+            var num = Number(val);
+            var max = Math.pow(2, bits) - 1;
+            return num > max ? max : (num < 0 ? 0 : num);
+          };
+          console.log("BigInt has been polyfilled for legacy Smart TV compatibility.");
+        }
+
         var errorLog = [];
         function showError(msg, file, line, col, err) {
           var consoleEl = document.getElementById('tv-error-console');
