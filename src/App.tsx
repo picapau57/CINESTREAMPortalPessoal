@@ -54,6 +54,7 @@ export default function App() {
     return localStorage.getItem('cinecast_session_id') || 'SALA_PRINCIPAL';
   });
   const [activeSessionData, setActiveSessionData] = useState<any>(null);
+  const [hasUnlockedAutoplay, setHasUnlockedAutoplay] = useState(false);
 
   // Custom interactive stat/info box toggle
   const [showStats, setShowStats] = useState(false);
@@ -632,6 +633,46 @@ export default function App() {
                 <p className="text-sm text-zinc-400 leading-relaxed max-w-lg mx-auto font-medium">
                   Esta tela está configurada como receptor de streaming para sua Smart TV ou TV Box.
                 </p>
+              </div>
+
+              {/* Autoplay Desbloqueador (Muito importante para TVs e TV Boxes) */}
+              <div className="max-w-md mx-auto">
+                {!hasUnlockedAutoplay ? (
+                  <button 
+                    onClick={() => {
+                      setHasUnlockedAutoplay(true);
+                      // Play a tiny, silent sound to trigger the user gesture authorization
+                      try {
+                        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+                        if (AudioContextClass) {
+                          const ctx = new AudioContextClass();
+                          const osc = ctx.createOscillator();
+                          osc.connect(ctx.destination);
+                          osc.start(0);
+                          osc.stop(0.001); // ultra short silent beep
+                        }
+                      } catch (e) {
+                        console.log("AudioContext not supported or blocked, user click gesture registered anyway");
+                      }
+                    }}
+                    className="w-full p-4 bg-gradient-to-r from-amber-500/10 via-orange-500/15 to-red-500/10 border border-amber-500/30 rounded-2xl text-left flex items-start gap-3 animate-pulse hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer shadow-lg shadow-amber-500/5"
+                  >
+                    <Info className="text-amber-400 shrink-0 mt-0.5" size={18} />
+                    <div className="flex-1">
+                      <h4 className="text-xs font-black text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <span>🔓 Desbloquear Autoplay (Recomendado para TV)</span>
+                      </h4>
+                      <p className="text-[10px] text-zinc-300 mt-1 leading-relaxed">
+                        Navegadores de TV bloqueiam vídeos automáticos por segurança. <strong>Clique aqui uma vez</strong> usando o controle remoto para autorizar transmissões automáticas com som!
+                      </p>
+                    </div>
+                  </button>
+                ) : (
+                  <div className="w-full p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl text-center flex items-center justify-center gap-2 text-[11px] font-black text-emerald-400 shadow-sm animate-in fade-in zoom-in duration-300">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
+                    <span>✓ AUTOPLAY AUTORIZADO — PRONTO PARA TRANSMITIR!</span>
+                  </div>
+                )}
               </div>
 
               {/* Status Code Block */}
