@@ -803,73 +803,106 @@ export default function App() {
 
               {/* CineCast Controller Remote Setup Guide */}
               {cinecastMode === 'controller' && (
-                <div className="p-5 bg-gradient-to-br from-blue-950/20 via-indigo-950/15 to-zinc-950/60 border border-blue-500/25 rounded-2xl flex flex-col md:flex-row items-center gap-6 shadow-2xl relative overflow-hidden animate-in fade-in slide-in-from-top-4 duration-300">
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl pointer-events-none" />
-                  
-                  {/* QR Code Column */}
-                  <div className="shrink-0 bg-white p-2.5 rounded-xl shadow-lg border border-white/10 flex flex-col items-center justify-center gap-1 w-36 h-36">
-                    <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&color=0c0c12&data=${encodeURIComponent(
-                        `${window.location.origin}${window.location.pathname}?mode=receiver&session=${cinecastSessionId}`
-                      )}`}
-                      alt="QR Code de Conexão"
-                      className="w-[110px] h-[110px] object-contain"
-                      referrerPolicy="no-referrer"
-                    />
-                    <span className="text-[7.5px] font-black text-zinc-800 tracking-wider uppercase font-mono leading-none">ESCANEAR COM A TV</span>
-                  </div>
-
-                  {/* Text Column */}
-                  <div className="flex-1 space-y-3 text-center md:text-left">
-                    <div className="space-y-0.5">
-                      <div className="flex items-center justify-center md:justify-start gap-1.5">
-                        <span className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
-                        <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest font-mono">CineCast Controle Remoto Ativo</span>
+                <div className="space-y-4">
+                  {/* Warning Header for "Invading TV Programming" and "No Camera on TV" */}
+                  <div className="p-5 bg-gradient-to-br from-blue-950/30 via-slate-900/40 to-zinc-950/80 border border-blue-500/20 rounded-2xl space-y-4 shadow-2xl relative overflow-hidden animate-in fade-in duration-300">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl pointer-events-none" />
+                    
+                    <div className="flex items-center gap-3 border-b border-white/5 pb-3">
+                      <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400">
+                        <Tv size={24} />
                       </div>
-                      <h3 className="text-sm font-black text-white uppercase tracking-tight">Como Transmitir para sua Smart TV ou TV Box:</h3>
+                      <div>
+                        <h3 className="text-sm font-black text-white uppercase tracking-tight">Como Fazer o Filme Abrir Automático na TV 📺</h3>
+                        <p className="text-[10px] text-zinc-400">Seu roteador liga os aparelhos, mas você precisa de uma das opções abaixo para conectar:</p>
+                      </div>
                     </div>
 
-                    <div className="space-y-1.5 text-[11px] text-zinc-400 leading-relaxed font-medium">
-                      <p>
-                        1. Abra o navegador de internet da sua TV e digite o link abaixo, ou <strong className="text-zinc-200">aponte a câmera do celular ou da TV Box para o QR Code</strong>.
-                      </p>
-                      <p>
-                        2. A TV abrirá o portal de streaming e se configurará <strong className="text-blue-400">automaticamente</strong> no Canal <strong className="text-white font-mono bg-blue-500/10 px-1 py-0.2 rounded border border-blue-500/20">{cinecastSessionId}</strong>.
-                      </p>
-                      <p>
-                        3. Com a tela ativa na TV, <strong className="text-zinc-200">basta clicar em qualquer filme ou canal</strong> abaixo para ele abrir automaticamente em tela cheia na TV!
-                      </p>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      {/* Option 1: Native casting (The only way to "hijack/invade" existing TV apps out of nowhere) */}
+                      <div className="p-4 bg-blue-500/5 border border-blue-500/15 rounded-xl space-y-2.5">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded bg-blue-500 text-white font-extrabold text-[9px] uppercase">Opção A</span>
+                          <h4 className="text-xs font-black text-white uppercase tracking-wider">Transmitir Via Wi-Fi (Invadir a TV) 🚀</h4>
+                        </div>
+                        <p className="text-[11px] text-zinc-300 leading-relaxed font-medium">
+                          Quer que o filme <strong>"invada" qualquer canal ou aplicativo</strong> rodando na TV no mesmo Wi-Fi de forma automática?
+                        </p>
+                        <div className="text-[10px] text-zinc-400 space-y-1.5 pl-2 border-l border-blue-500/30">
+                          <p>1. No seu celular ou PC, coloque em <strong className="text-blue-400">Modo Normal</strong> e clique no filme.</p>
+                          <p>2. Assim que o player abrir, toque no ícone nativo de <strong className="text-white">Transmitir (Cast / AirPlay)</strong> que aparece no próprio player de vídeo ou no topo do navegador Google Chrome / Safari.</p>
+                          <p>3. Selecione sua Smart TV na lista. O vídeo irá invadir e rodar diretamente nela!</p>
+                        </div>
+                      </div>
+
+                      {/* Option 2: Custom CineCast (For Smart TV browsers, TV Boxes, Fire TV) */}
+                      <div className="p-4 bg-indigo-500/5 border border-indigo-500/15 rounded-xl space-y-2.5">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded bg-indigo-500 text-white font-extrabold text-[9px] uppercase">Opção B</span>
+                          <h4 className="text-xs font-black text-white uppercase tracking-wider">CineCast (Sincronização Digital) 🔗</h4>
+                        </div>
+                        <p className="text-[11px] text-zinc-300 leading-relaxed font-medium">
+                          Para controlar a TV pelo celular usando o nosso sistema, <strong>o navegador da TV precisa estar aberto na página do app</strong>:
+                        </p>
+                        <div className="text-[10px] text-zinc-400 space-y-1.5 pl-2 border-l border-indigo-500/30">
+                          <p>1. <strong className="text-amber-400">A TV não tem câmera</strong>, então não leia o QR Code com a TV! O QR serve para abrir o player no seu celular ou tablet secundário.</p>
+                          <p>2. Abra o navegador de internet da TV e digite o endereço abaixo (crie um link curto como <strong className="text-white">bit.ly</strong> ou salve nos favoritos para nunca mais precisar digitar):</p>
+                          <p className="bg-zinc-950 p-1 rounded font-mono text-[9px] text-zinc-300 break-all select-all border border-white/5">{`${window.location.origin}${window.location.pathname}?mode=receiver&session=${cinecastSessionId}`}</p>
+                          <p>3. Ao carregar na TV, clique no botão amarelo <strong className="text-amber-400">"🔓 Desbloquear Autoplay"</strong> uma vez na tela da TV com o controle remoto (necessário devido à segurança das Smart TVs).</p>
+                        </div>
+                      </div>
                     </div>
 
-                    {/* Copy Link Input group */}
-                    <div className="flex items-center gap-2 max-w-md mx-auto md:mx-0 pt-1">
-                      <input
-                        type="text"
-                        readOnly
-                        value={`${window.location.origin}${window.location.pathname}?mode=receiver&session=${cinecastSessionId}`}
-                        className="flex-1 bg-zinc-950/80 border border-white/5 rounded-lg py-1 px-2.5 text-[9px] text-zinc-400 font-mono focus:outline-none select-all"
-                        onClick={(e) => (e.target as HTMLInputElement).select()}
-                      />
-                      <button
-                        onClick={() => {
-                          const link = `${window.location.origin}${window.location.pathname}?mode=receiver&session=${cinecastSessionId}`;
-                          try {
-                            navigator.clipboard.writeText(link);
-                          } catch (err) {
-                            console.warn("Clipboard access failed", err);
-                          }
-                          setIsLinkCopied(true);
-                          setTimeout(() => setIsLinkCopied(false), 3000);
-                        }}
-                        className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-300 shrink-0 cursor-pointer ${
-                          isLinkCopied
-                            ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20'
-                            : 'bg-blue-600 hover:bg-blue-500 text-white'
-                        }`}
-                      >
-                        {isLinkCopied ? 'Copiado!' : 'Copiar Link'}
-                      </button>
+                    {/* QR Code and Quick Share */}
+                    <div className="flex flex-col md:flex-row items-center gap-4 pt-3 border-t border-white/5">
+                      <div className="shrink-0 bg-white p-2 rounded-xl shadow-md flex flex-col items-center justify-center gap-1">
+                        <img
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&color=0c0c12&data=${encodeURIComponent(
+                            `${window.location.origin}${window.location.pathname}?mode=receiver&session=${cinecastSessionId}`
+                          )}`}
+                          alt="QR Code de Conexão"
+                          className="w-[90px] h-[90px] object-contain"
+                          referrerPolicy="no-referrer"
+                        />
+                        <span className="text-[7px] font-black text-zinc-800 tracking-wider uppercase font-mono leading-none">CINECAST CELULAR/TABLET</span>
+                      </div>
+
+                      <div className="flex-1 space-y-2 text-center md:text-left">
+                        <h4 className="text-xs font-black text-white uppercase">Link Direto para o Navegador da TV:</h4>
+                        <p className="text-[10px] text-zinc-400 leading-normal">
+                          Para facilitar, copie o link abaixo e envie para sua TV ou use um encurtador de links (ex: <a href="https://tinyurl.com" target="_blank" rel="noreferrer" className="text-blue-400 underline">tinyurl.com</a> ou <a href="https://bitly.com" target="_blank" rel="noreferrer" className="text-blue-400 underline">bit.ly</a>) para digitar na TV de forma super rápida e fácil!
+                        </p>
+                        <div className="flex items-center gap-2 max-w-md mx-auto md:mx-0">
+                          <input
+                            type="text"
+                            readOnly
+                            value={`${window.location.origin}${window.location.pathname}?mode=receiver&session=${cinecastSessionId}`}
+                            className="flex-1 bg-zinc-950/80 border border-white/5 rounded-lg py-1 px-2 text-[9px] text-zinc-400 font-mono focus:outline-none select-all"
+                            onClick={(e) => (e.target as HTMLInputElement).select()}
+                          />
+                          <button
+                            onClick={() => {
+                              const link = `${window.location.origin}${window.location.pathname}?mode=receiver&session=${cinecastSessionId}`;
+                              try {
+                                navigator.clipboard.writeText(link);
+                              } catch (err) {
+                                console.warn("Clipboard access failed", err);
+                              }
+                              setIsLinkCopied(true);
+                              setTimeout(() => setIsLinkCopied(false), 3000);
+                            }}
+                            className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-300 shrink-0 cursor-pointer ${
+                              isLinkCopied
+                                ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20'
+                                : 'bg-blue-600 hover:bg-blue-500 text-white'
+                            }`}
+                          >
+                            {isLinkCopied ? 'Copiado!' : 'Copiar Link'}
+                          </button>
+                        </div>
+                      </div>
                     </div>
+
                   </div>
                 </div>
               )}
