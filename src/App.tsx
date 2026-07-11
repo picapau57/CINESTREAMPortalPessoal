@@ -48,13 +48,28 @@ export default function App() {
   
   // --- CINECAST CASTING STATES ---
   const [cinecastMode, setCinecastMode] = useState<'normal' | 'receiver' | 'controller'>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const modeParam = params.get('mode');
+      if (modeParam === 'receiver' || modeParam === 'controller' || modeParam === 'normal') {
+        return modeParam;
+      }
+    }
     return (localStorage.getItem('cinecast_mode') as 'normal' | 'receiver' | 'controller') || 'normal';
   });
   const [cinecastSessionId, setCinecastSessionId] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const sessionParam = params.get('session');
+      if (sessionParam) {
+        return sessionParam.toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+      }
+    }
     return localStorage.getItem('cinecast_session_id') || 'SALA_PRINCIPAL';
   });
   const [activeSessionData, setActiveSessionData] = useState<any>(null);
   const [hasUnlockedAutoplay, setHasUnlockedAutoplay] = useState(false);
+  const [isLinkCopied, setIsLinkCopied] = useState(false);
 
   // Custom interactive stat/info box toggle
   const [showStats, setShowStats] = useState(false);
@@ -785,6 +800,79 @@ export default function App() {
 
             {/* Main Scrolling Body */}
             <div className="flex-1 p-6 space-y-6 overflow-y-auto">
+
+              {/* CineCast Controller Remote Setup Guide */}
+              {cinecastMode === 'controller' && (
+                <div className="p-5 bg-gradient-to-br from-blue-950/20 via-indigo-950/15 to-zinc-950/60 border border-blue-500/25 rounded-2xl flex flex-col md:flex-row items-center gap-6 shadow-2xl relative overflow-hidden animate-in fade-in slide-in-from-top-4 duration-300">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl pointer-events-none" />
+                  
+                  {/* QR Code Column */}
+                  <div className="shrink-0 bg-white p-2.5 rounded-xl shadow-lg border border-white/10 flex flex-col items-center justify-center gap-1 w-36 h-36">
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&color=0c0c12&data=${encodeURIComponent(
+                        `${window.location.origin}${window.location.pathname}?mode=receiver&session=${cinecastSessionId}`
+                      )}`}
+                      alt="QR Code de Conexão"
+                      className="w-[110px] h-[110px] object-contain"
+                      referrerPolicy="no-referrer"
+                    />
+                    <span className="text-[7.5px] font-black text-zinc-800 tracking-wider uppercase font-mono leading-none">ESCANEAR COM A TV</span>
+                  </div>
+
+                  {/* Text Column */}
+                  <div className="flex-1 space-y-3 text-center md:text-left">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center justify-center md:justify-start gap-1.5">
+                        <span className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+                        <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest font-mono">CineCast Controle Remoto Ativo</span>
+                      </div>
+                      <h3 className="text-sm font-black text-white uppercase tracking-tight">Como Transmitir para sua Smart TV ou TV Box:</h3>
+                    </div>
+
+                    <div className="space-y-1.5 text-[11px] text-zinc-400 leading-relaxed font-medium">
+                      <p>
+                        1. Abra o navegador de internet da sua TV e digite o link abaixo, ou <strong className="text-zinc-200">aponte a câmera do celular ou da TV Box para o QR Code</strong>.
+                      </p>
+                      <p>
+                        2. A TV abrirá o portal de streaming e se configurará <strong className="text-blue-400">automaticamente</strong> no Canal <strong className="text-white font-mono bg-blue-500/10 px-1 py-0.2 rounded border border-blue-500/20">{cinecastSessionId}</strong>.
+                      </p>
+                      <p>
+                        3. Com a tela ativa na TV, <strong className="text-zinc-200">basta clicar em qualquer filme ou canal</strong> abaixo para ele abrir automaticamente em tela cheia na TV!
+                      </p>
+                    </div>
+
+                    {/* Copy Link Input group */}
+                    <div className="flex items-center gap-2 max-w-md mx-auto md:mx-0 pt-1">
+                      <input
+                        type="text"
+                        readOnly
+                        value={`${window.location.origin}${window.location.pathname}?mode=receiver&session=${cinecastSessionId}`}
+                        className="flex-1 bg-zinc-950/80 border border-white/5 rounded-lg py-1 px-2.5 text-[9px] text-zinc-400 font-mono focus:outline-none select-all"
+                        onClick={(e) => (e.target as HTMLInputElement).select()}
+                      />
+                      <button
+                        onClick={() => {
+                          const link = `${window.location.origin}${window.location.pathname}?mode=receiver&session=${cinecastSessionId}`;
+                          try {
+                            navigator.clipboard.writeText(link);
+                          } catch (err) {
+                            console.warn("Clipboard access failed", err);
+                          }
+                          setIsLinkCopied(true);
+                          setTimeout(() => setIsLinkCopied(false), 3000);
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-300 shrink-0 cursor-pointer ${
+                          isLinkCopied
+                            ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20'
+                            : 'bg-blue-600 hover:bg-blue-500 text-white'
+                        }`}
+                      >
+                        {isLinkCopied ? 'Copiado!' : 'Copiar Link'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Interactive Statistics Banner */}
               <AnimatePresence>
